@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.signal
 import soundfile
 
 import matplotlib.pyplot as plt
@@ -24,10 +25,9 @@ class PhaseVocoder:
         magnitude = np.abs(fft)
         phase = np.angle(fft)
         
-        
-        if np.max(np.abs(block)) > 0.25:
-            plt.plot(phase)
-            plt.show()
+        #if np.max(np.abs(block)) > 0.25:
+        #    plt.plot(phase)
+        #    plt.show()
         
         dt = self.blocksize / self.samplerate
         
@@ -57,24 +57,47 @@ class PhaseVocoder:
 
         return magnitude, phase, min_f
     
-    def synthesize(self, magnitude, frequency):
+    def window_out(self, magnitude, phase):
+        extrema = scipy.signal.argrelextrema(magnitude, np.greater)
+        for peak in extrema[0]:
+            n = 1
+            while (peak - n >= 0):
+                i = peak - n
+                value = magnitude[i]
+                if n > 1 and value > last_value:
+                    break
+                last_value = value
+                phase[i] = (phase[peak] + np.pi * i) % (2 * np.pi)
+                n += 1
+            n = 1
+            while (peak + n < phase.size):
+                i = peak + n
+                value = magnitude[i]
+                if n > 1 and value > last_value:
+                    break
+                last_value = value
+                phase[i] = (phase[peak] + np.pi * i) % (2 * np.pi)
+                n += 1
+    
+    def synthesize(self, magnitude, phase):
         dt = self.blocksize / self.samplerate
         
         phase = (self.last_phase_out + 2 * np.pi * frequency * dt) % (np.pi * 2)
         self.last_phase_out = phase
     
-        # TODO: nearby phase adjustment
+        self.window_out(magnitude, phase)
+    
         fft = magnitude * np.exp(1j*phase)
         
-        out_block = np.fft.irfft(fft)
+        out_block = np.fft.irfft(fft) #* self.window
         
-        plt.subplot(311)
-        plt.plot(phase)
-        plt.subplot(312)
-        plt.plot(magnitude)
-        plt.subplot(313)
-        plt.plot(out_block)
-        plt.show()
+        #plt.subplot(311)
+        #plt.plot(phase)
+        #plt.subplot(312)
+        #plt.plot(magnitude)
+        #plt.subplot(313)
+        #plt.plot(out_block)
+        #plt.show()
         
         return out_block
 
@@ -100,11 +123,11 @@ if __name__ == "__main__":
         if block.shape[0] == BLOCKSIZE:
             magnitude, phase, frequency = pvc.analyze(block)
             
-            magnitude = np.interp(indices/pitch_mult,indices,magnitude,0,0)
-            frequency = np.interp(indices/pitch_mult,indices,frequency,0,0)*pitch_mult
+            #magnitude = np.interp(indices/pitch_mult,indices,magnitude,0,0)
+            #frequency = np.interp(indices/pitch_mult,indices,frequency,0,0)*pitch_mult
             #phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
             
-            out_block = pvc.synthesize(magnitude, frequency)
+            out_block = pvc.synthesize(magnitude, phase)
             
             joined_block = last_block[pvc.overlap:] + out_block[:pvc.overlap]
             last_block = out_block
