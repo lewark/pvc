@@ -11,12 +11,10 @@ class PhaseVocoder:
         
         self.fft_size = (blocksize//2)+1
         
-        #self.last_fft = None
-        #self.last_mag = np.zeros(self.fft_size)
         self.last_phase = np.zeros(self.fft_size)
         self.last_phase_out = np.zeros(self.fft_size)
         
-        self.window = np.hanning(BLOCKSIZE) #np.sin(np.arange(BLOCKSIZE)*np.pi/BLOCKSIZE)
+        self.window = np.hanning(BLOCKSIZE)
         self.freq = np.fft.rfftfreq(blocksize,1/samplerate)
         
     def analyze(self, block, advance):
@@ -25,10 +23,6 @@ class PhaseVocoder:
         
         magnitude = np.abs(fft)
         phase = np.angle(fft)
-        
-        #if np.max(np.abs(block)) > 0.25:
-        #    plt.plot(phase)
-        #    plt.show()
         
         dt = advance / self.samplerate
         
@@ -52,13 +46,12 @@ class PhaseVocoder:
             
             n += 1
         
-        #self.last_fft = fft
-        #self.last_mag = magnitude
         self.last_phase = phase
 
         return magnitude, phase, min_f
     
     def window_out(self, magnitude, phase):
+        # TODO: figure out why this isn't working
         extrema = scipy.signal.argrelextrema(magnitude, np.greater)
         for peak in extrema[0]:
             n = 1
@@ -94,7 +87,7 @@ class PhaseVocoder:
     
         fft = magnitude * np.exp(1j*out_phase)
         
-        out_block = np.fft.irfft(fft) #* self.window
+        out_block = np.fft.irfft(fft) * self.window
         
         """#plt.subplot(311)
         ax1 = plt.subplot(311)
@@ -113,38 +106,37 @@ if __name__ == "__main__":
     INFILE="audio/test.flac"
     OUTFILE="audio/out2.flac"
     BLOCKSIZE = 4096
+    INSHIFT = BLOCKSIZE // 4
+    OUTSHIFT = BLOCKSIZE // 4
+    PITCH_MULT = 1
     
-    #n_windows = 4
-
-    overlap = BLOCKSIZE // 2
-
-    out_blocks = []
-    last_block = np.zeros(BLOCKSIZE) #for n in range(n_windows)]
-
-    file = soundfile.SoundFile(INFILE)
-    rate = file.samplerate
-
-    pitch_mult = 2
     last_block = np.zeros(BLOCKSIZE)
+
+    infile = soundfile.SoundFile(INFILE)
+    rate = infile.samplerate
+    
+    out_data = np.zeros(int(np.ceil(infile.frames * OUTSHIFT/INSHIFT)))
 
     pvc = PhaseVocoder(rate, BLOCKSIZE)
 
     indices = np.arange(pvc.fft_size)
     
-    for block in file.blocks(blocksize=BLOCKSIZE, overlap=overlap):
+    t = 0
+    for block in infile.blocks(blocksize=BLOCKSIZE, overlap=(BLOCKSIZE-INSHIFT)):
         if block.shape[0] == BLOCKSIZE:
-            magnitude, phase, frequency = pvc.analyze(block, overlap)
+            magnitude, phase, frequency = pvc.analyze(block, INSHIFT)
             
-            #magnitude = np.interp(indices/pitch_mult,indices,magnitude,0,0)
-            #frequency = np.interp(indices/pitch_mult,indices,frequency,0,0)*pitch_mult
+            if PITCH_MULT != 1:
+                magnitude = np.interp(indices/PITCH_MULT,indices,magnitude,0,0)
+                frequency = np.interp(indices/PITCH_MULT,indices,frequency,0,0)*PITCH_MULT
+                #phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
             
-            #phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
+            out_block = pvc.synthesize(magnitude, frequency, OUTSHIFT)
             
-            out_block = pvc.synthesize(magnitude, frequency, overlap)
+            out_data[t:t+BLOCKSIZE] += out_block
             
-            joined_block = last_block[overlap:] + out_block[:overlap]
-            last_block = out_block
-            
-            out_blocks.append(joined_block)
-        
-    soundfile.write(OUTFILE, np.concatenate(out_blocks), rate)
+            t += OUTSHIFT
+    
+    out_data = out_data / np.max(np.abs(out_data))
+    
+    soundfile.write(OUTFILE, out_data, rate)
