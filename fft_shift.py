@@ -19,7 +19,7 @@ class PhaseVocoder:
         self.freq = np.fft.rfftfreq(blocksize,1/samplerate)
         
     def analyze(self, block):
-        in_block = block * self.window
+        in_block = block * self.window #np.fft.fftshift()
         fft = np.fft.rfft(in_block)
         
         magnitude = np.abs(fft)
@@ -67,7 +67,7 @@ class PhaseVocoder:
                 if n > 1 and value > last_value:
                     break
                 last_value = value
-                phase[i] = (phase[peak] + np.pi * i) % (2 * np.pi)
+                phase[i] = (phase[peak] + np.pi * (i % 2))
                 n += 1
             n = 1
             while (peak + n < phase.size):
@@ -76,28 +76,35 @@ class PhaseVocoder:
                 if n > 1 and value > last_value:
                     break
                 last_value = value
-                phase[i] = (phase[peak] + np.pi * i) % (2 * np.pi)
+                phase[i] = (phase[peak] + np.pi * (i % 2))
                 n += 1
+    
+    def constrain_phase(self, phase):
+        return ((phase + np.pi) % (np.pi * 2)) - np.pi
     
     def synthesize(self, magnitude, phase):
         dt = self.blocksize / self.samplerate
         
-        phase = (self.last_phase_out + 2 * np.pi * frequency * dt) % (np.pi * 2)
-        self.last_phase_out = phase
+        out_phase = self.last_phase_out + 2 * np.pi * frequency * dt
+        self.last_phase_out = out_phase
     
-        self.window_out(magnitude, phase)
+        #self.window_out(magnitude, out_phase)
+        out_phase = self.constrain_phase(out_phase)
     
-        fft = magnitude * np.exp(1j*phase)
+        fft = magnitude * np.exp(1j*out_phase)
         
-        out_block = np.fft.irfft(fft) #* self.window
+        out_block = np.fft.irfft(fft) * self.window
         
         #plt.subplot(311)
-        #plt.plot(phase)
-        #plt.subplot(312)
-        #plt.plot(magnitude)
+        ax1 = plt.subplot(311)
+        plt.plot(phase)
+        ax2 = plt.subplot(312,sharex=ax1,sharey=ax1)
+        plt.plot(out_phase)
+        ax3 = plt.subplot(313,sharex=ax1)
+        plt.plot(magnitude)
         #plt.subplot(313)
         #plt.plot(out_block)
-        #plt.show()
+        plt.show()
         
         return out_block
 
