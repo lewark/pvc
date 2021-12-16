@@ -82,8 +82,8 @@ class PhaseVocoder:
     def constrain_phase(self, phase):
         return ((phase + np.pi) % (np.pi * 2)) - np.pi
     
-    def synthesize(self, magnitude, phase):
-        dt = self.blocksize / self.samplerate
+    def synthesize(self, magnitude, frequency):
+        dt = self.overlap / self.samplerate
         
         out_phase = self.last_phase_out + 2 * np.pi * frequency * dt
         self.last_phase_out = out_phase
@@ -96,15 +96,15 @@ class PhaseVocoder:
         out_block = np.fft.irfft(fft) * self.window
         
         #plt.subplot(311)
-        ax1 = plt.subplot(311)
-        plt.plot(phase)
-        ax2 = plt.subplot(312,sharex=ax1,sharey=ax1)
-        plt.plot(out_phase)
-        ax3 = plt.subplot(313,sharex=ax1)
-        plt.plot(magnitude)
+        #ax1 = plt.subplot(311)
+        #plt.plot(phase)
+        #ax2 = plt.subplot(312,sharex=ax1,sharey=ax1)
+        #plt.plot(out_phase)
+        #ax3 = plt.subplot(313,sharex=ax1)
+        #plt.plot(magnitude)
         #plt.subplot(313)
         #plt.plot(out_block)
-        plt.show()
+        #plt.show()
         
         return out_block
 
@@ -112,9 +112,11 @@ if __name__ == "__main__":
     INFILE="audio/test.flac"
     OUTFILE="audio/out2.flac"
     BLOCKSIZE = 4096
+    
+    #n_windows = 4
 
     out_blocks = []
-    last_block = np.zeros(BLOCKSIZE)
+    last_block = np.zeros(BLOCKSIZE) #for n in range(n_windows)]
 
     file = soundfile.SoundFile(INFILE)
     rate = file.samplerate
@@ -134,7 +136,7 @@ if __name__ == "__main__":
             #frequency = np.interp(indices/pitch_mult,indices,frequency,0,0)*pitch_mult
             #phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
             
-            out_block = pvc.synthesize(magnitude, phase)
+            out_block = pvc.synthesize(magnitude, frequency)
             
             joined_block = last_block[pvc.overlap:] + out_block[:pvc.overlap]
             last_block = out_block
