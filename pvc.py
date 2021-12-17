@@ -138,16 +138,16 @@ if __name__ == "__main__":
     
     out_data = np.zeros((out_length,in_file.channels))
 
-    pvc = PhaseVocoder(rate, block_size)
+    pvc = [PhaseVocoder(rate, block_size) for i in range(in_file.channels)]
 
-    indices = np.arange(pvc.fft_size)
+    indices = np.arange(pvc[0].fft_size)
     
     t = 0
     for block in in_file.blocks(blocksize=block_size, overlap=(block_size-in_shift), always_2d=True):
         if block.shape[0] != block_size:
             block = np.pad(block, ((0,block_size-block.shape[0]),(0,0)))
         for channel in range(in_file.channels):
-            magnitude, phase, frequency = pvc.analyze(block[:,channel], in_shift)
+            magnitude, phase, frequency = pvc[channel].analyze(block[:,channel], in_shift)
             
             if pitch_mult != 1:
                 # stretch or squeeze in the frequency domain to perform pitch shifting
@@ -155,7 +155,7 @@ if __name__ == "__main__":
                 frequency = np.interp(indices/pitch_mult,indices,frequency,0,0)*pitch_mult
                 #phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
             
-            out_block = pvc.synthesize(magnitude, frequency, out_shift)
+            out_block = pvc[channel].synthesize(magnitude, frequency, out_shift)
             out_data[t:t+block_size,channel] += out_block    
             
         t += out_shift
@@ -163,3 +163,4 @@ if __name__ == "__main__":
     out_data = out_data / np.max(np.abs(out_data))
     
     soundfile.write(out_filename, out_data, rate)
+    in_file.close()
