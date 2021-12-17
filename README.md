@@ -6,7 +6,7 @@ Dependencies: numpy, soundfile
 
 ## Usage
 ```
-python3 pvc.py <in_filename> <out_filename> <length_mult> <pitch_mult> [block_size={}] [n_blocks={}]
+python3 pvc.py <in_filename> <out_filename> <length_mult> <pitch_mult> [block_size=4096] [n_blocks=4]
 ```
 
 ## References
