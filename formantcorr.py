@@ -7,6 +7,9 @@ import soundfile
 
 import pvc
 
+# TODO: Implement shifting of formants
+# and, later, identification and shifting of individual formants 
+
 if __name__ == "__main__":
     block_size = 4096
     n_blocks = 4
