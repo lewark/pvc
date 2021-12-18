@@ -7,6 +7,8 @@ import soundfile
 
 import pvc
 
+# TODO: This doesn't work correctly, and grabs small peaks rather than the larger-scale formants
+
 if __name__ == "__main__":
     block_size = 4096
     n_blocks = 4
