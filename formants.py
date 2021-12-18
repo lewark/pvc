@@ -11,6 +11,7 @@ if __name__ == "__main__":
     block_size = 4096
     n_blocks = 4
     vol_thresh = 0.01
+    peak_border = 4
 
     #if len(sys.argv) < 5:
     #    print("Usage: {} <in_filename> <out_filename> <length_mult> <pitch_mult> [block_size={}] [n_blocks={}]".format(
@@ -20,7 +21,8 @@ if __name__ == "__main__":
     
     in_filename = "audio/test.flac" #sys.argv[1]
     out_filename = "audio/test_formants.flac" #sys.argv[2]
-    pitch_mult = [2,2,2,2] #float(sys.argv[4])
+    pitch_formant = [1,1,1,1,1] #float(sys.argv[4])
+    pitch_shift = 1.5
     
     if len(sys.argv) >= 6:
         block_size = int(sys.argv[5])
@@ -58,20 +60,18 @@ if __name__ == "__main__":
             block = np.pad(block, ((0,block_size-block.shape[0]),(0,0)))
         magnitude, phase, frequency = t_pvc.analyze(block, in_shift)
         
-        spectrogram[:,index] = magnitude
+        spectrogram[:,index] = np.log(magnitude)
         
         if np.max(np.abs(block)) >= vol_thresh:
             peaks, properties = scipy.signal.find_peaks(magnitude, prominence=8) #, height=np.mean(magnitude))
             
             print(peaks)
             
-            
-            
             #plt.plot(t_pvc.freq, magnitude)
             #plt.scatter(t_pvc.freq[peaks], magnitude[peaks])
             #plt.show()
             
-            target_peaks = len(pitch_mult)
+            target_peaks = len(pitch_formant)
             n_peaks = len(peaks)
             
             p_x.extend((index,) * len(peaks))
@@ -80,54 +80,66 @@ if __name__ == "__main__":
             #if n_peaks > target_peaks:
 
             #peaks2 = peaks[:target_peaks]
-            mask = np.zeros(magnitude.size)
-            mag_sum = np.zeros(magnitude.size)
-            freq_sum = np.zeros(magnitude.size)
+            
             last_peak = 0
             end = 0
+            first_start = 0
+            
+            layers = []
+            
             for i, peak in enumerate(peaks):
                 if i >= target_peaks:
                     break
                 
                 start = 0
-                if i >= 1:
+                if i == 0:
+                    start = max(peak - peak_border,0)
+                    first_start = start
+                else:
                     start = np.argmin(magnitude[last_peak:peak])+last_peak
                 if i < n_peaks - 1:
                     next_peak = peaks[i+1]
                     end = np.argmin(magnitude[peak:next_peak])+peak-1
                 else:
-                    end = peak + 4 # TODO: arbitrary number
-                
-                peak_mag = np.zeros(magnitude.size)
-                peak_freq = np.zeros(magnitude.size)
-                peak_mask = np.zeros(magnitude.size)
-                peak_mask[start:end] = 1
-                peak_mag[start:end] = magnitude[start:end]
-                peak_freq[start:end] = frequency[start:end]
-                
-                mask[start]
+                    end = min(peak + peak_border,magnitude.size-1)
                     
-                peak_mag = np.interp(indices/pitch_mult[i],indices,peak_mag,0,0)
-                peak_freq = np.interp(indices/pitch_mult[i],indices,peak_freq,0,0)*pitch_mult[i]
-                peak_mask = np.interp(indices/pitch_mult[i],indices,peak_mask,0,0)
-                
-                mag_sum += peak_mag
-                freq_sum += peak_freq
-                mask += peak_mask
-                
+                layers.append((start,end,pitch_formant[i]))
                 last_peak = peak
             
-            mag_sum[end+1:] += magnitude[end+1:]
-            freq_sum[end+1:] += frequency[end+1:]
-            mask[end+1:] += 1
+            layers.append((0,first_start,pitch_shift))
+            layers.append((end,magnitude.size-1,pitch_shift))
             
-            to_modify = mask > 0
+            mask = np.zeros(magnitude.size)
+            mag_sum = np.zeros(magnitude.size)
+            freq_sum = np.zeros(magnitude.size)
+            
+            for layer in layers:
+                start = layer[0]
+                end = layer[1]
+                pitch = layer[2]
+                if end > start:
+                    peak_mag = np.zeros(magnitude.size)
+                    peak_freq = np.zeros(magnitude.size)
+                    peak_mask = np.zeros(magnitude.size)
+                    peak_mask[start:end] = 1
+                    peak_mag[start:end] = magnitude[start:end]
+                    peak_freq[start:end] = frequency[start:end]
+                        
+                    peak_mag = np.interp(indices/pitch,indices,peak_mag,0,0)
+                    peak_freq = np.interp(indices/pitch,indices,peak_freq,0,0)*pitch
+                    peak_mask = np.interp(indices/pitch,indices,peak_mask,0,0)
+                    
+                    mag_sum += peak_mag
+                    freq_sum += peak_freq
+                    mask += peak_mask
+            
+            to_modify = (mask > 0)
             freq_sum[to_modify] /= mask[to_modify]
             
             magnitude = mag_sum
             frequency = freq_sum
         
-        out_spectrogram[:,index] = magnitude
+        out_spectrogram[:,index] = np.log(magnitude)
         
         out_block = t_pvc.synthesize(magnitude, frequency, out_shift)
         out_data[t:t+block_size] += out_block    
