@@ -27,9 +27,53 @@ class PhaseVocoder:
         
         dt = advance / self.samplerate
         
-        # TODO: optimize this?
+        min_f = self.est_freqs_div(phase, dt)
+        #min_f2 = self.est_freqs_bruteforce(phase, dt)
+
+        #err = np.abs(min_f2[1:] - min_f[1:])
+        #err_q = np.max(err)
+        
+        #print(err)
+        #if err_q > 0.001:
+        #    err_i = np.argmax(err)
+        #    print("err")
+        #    #print("err",err_i, err_q, min_f[err_i], min_f2[err_i], self.freq[err_i])
+        #    #print("diff",np.max(np.abs(min_f - self.freq)),np.max(np.abs(min_f2 - self.freq)))
+        
+        self.last_phase = phase
+
+        return magnitude, phase, min_f
+    
+    def est_freqs_div(self, phase, dt):
+        # TODO: This runs into problems at first bin, investigate
+    
+        # fn = (phase - self.last_phase + 2 * np.pi * n)/(2 * np.pi * dt)
+        # solving for n:
+        # fn - (phase - last_phase) / (2 * np.pi * dt) = (2 * np.pi * n) / (2 * np.pi * dt)
+        # fn - (phase - last_phase) / (2 * np.pi * dt) = n / dt
+        # (fn - (phase - last_phase) / (2 * np.pi * dt)) * dt = n
+        
+        freq_base = (phase - self.last_phase) / (2 * np.pi * dt)
+        # n = np.round((self.freq - freq_base) / ((2 * np.pi) / (2 * np.pi * dt)))
+        
+        n = np.maximum(np.round((self.freq - freq_base) * dt),0)
+        #print(n)
+        #print(freq_base, n, (n < 0).any())
+        
+        #if (n < 0).any():
+        #    print("negative n", np.min(n), np.argmin(n))
+            
+        min_f = freq_base + (n / dt)
+        
+        #if (min_f < 0).any():
+        #    i = np.argmin(min_f)
+        #    print("negative", np.min(min_f), i, n[i], freq_base[i], self.freq[i] - freq_base[i], 1/dt)
+        
+        return min_f
+    
+    def est_freqs_bruteforce(self, phase, dt):
         min_diff = None
-        min_f = np.zeros(self.freq.size)
+        min_f2 = np.zeros(self.freq.size)
         n = 0
         while True:
             fn = (phase - self.last_phase + 2 * np.pi * n)/(2 * np.pi * dt)
@@ -37,19 +81,17 @@ class PhaseVocoder:
             
             if min_diff is None:
                 min_diff = diff
-                
-            success = diff < min_diff
-            min_diff[success] = diff[success]
-            min_f[success] = fn[success]
+                min_f2 = fn
+            else:
+                success = diff <= min_diff
+                min_diff[success] = diff[success]
+                min_f2[success] = fn[success]
             
             if (fn > self.freq).all():
                 break
             
             n += 1
-        
-        self.last_phase = phase
-
-        return magnitude, phase, min_f
+        return min_f2
     
     """
     def window_out(self, magnitude, phase):
