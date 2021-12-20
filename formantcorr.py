@@ -7,8 +7,7 @@ import soundfile
 
 import pvc
 
-# TODO: Implement shifting of formants
-# and, later, identification and shifting of individual formants 
+# TODO: Implement identification and shifting of individual formants 
 
 if __name__ == "__main__":
     block_size = 4096
@@ -17,7 +16,7 @@ if __name__ == "__main__":
     FILT_SIZE = 8
 
     if len(sys.argv) < 5:
-        print("Usage: {} <in_filename> <out_filename> <length_mult> <pitch_mult> [block_size={}] [n_blocks={}]".format(
+        print("Usage: {} <in_filename> <out_filename> <length_mult> <pitch_mult> <formant_pitch_mult> [block_size={}] [n_blocks={}]".format(
             sys.argv[0], block_size, n_blocks
         ))
         sys.exit()
@@ -26,11 +25,12 @@ if __name__ == "__main__":
     out_filename = sys.argv[2]
     length_mult = float(sys.argv[3])
     pitch_mult = float(sys.argv[4])
+    formant_pitch_mult = float(sys.argv[5])
     
-    if len(sys.argv) >= 6:
-        block_size = int(sys.argv[5])
     if len(sys.argv) >= 7:
-        n_blocks = int(sys.argv[6])
+        block_size = int(sys.argv[6])
+    if len(sys.argv) >= 8:
+        n_blocks = int(sys.argv[7])
 
     in_shift = block_size // n_blocks
     out_shift = int(in_shift * length_mult)
@@ -56,20 +56,30 @@ if __name__ == "__main__":
         for channel in range(in_file.channels):
             magnitude, phase, frequency = t_pvc[channel].analyze(block[:,channel], in_shift)
             
-            if pitch_mult != 1:
+            contour = None
+            
+            if pitch_mult != 1 or formant_pitch_mult != 1:
                 contour = np.maximum(scipy.ndimage.maximum_filter1d(magnitude,FILT_SIZE),0.001)
                 
+                # divide the formants out of the signal, leaving the smaller-scale peaks
+                magnitude = magnitude / contour
+            
                 #plt.plot(contour)
                 #plt.plot(magnitude)
                 #plt.show()
-                
-                magnitude = magnitude / contour
+            
+                if formant_pitch_mult != 1:
+                    contour = np.interp(indices/formant_pitch_mult,indices,contour,0,0)
+            
+            if pitch_mult != 1:                
             
                 # stretch or squeeze in the frequency domain to perform pitch shifting
                 magnitude = np.interp(indices/pitch_mult,indices,magnitude,0,0)
                 frequency = np.interp(indices/pitch_mult,indices,frequency,0,0)*pitch_mult
                 #phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
                 
+            if pitch_mult != 1 or formant_pitch_mult != 1:
+                # re-apply the formants
                 magnitude = magnitude * contour
             
             out_block = t_pvc[channel].synthesize(magnitude, frequency, out_shift)
