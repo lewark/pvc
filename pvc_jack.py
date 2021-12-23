@@ -11,9 +11,9 @@ class CircularBuffer:
         self.arr = np.zeros(n)
         self.widx = 0
         self.ridx = 0
-        
-    def peek(self, n, offset=0):
-        start = (self.ridx + offset) % self.arr.size
+       
+    def get_indices(self, n, offset, idx):
+        start = (idx + offset) % self.arr.size
         end = start + n
         
         if end > self.arr.size:
@@ -24,52 +24,33 @@ class CircularBuffer:
             
             split = l_end - l_start
             
-            out = np.zeros(n)
-            
-            out[:split] = self.arr[l_start:l_end]
-            out[split:] = self.arr[r_start:r_end]
-            
-            return out
+            return l_start, l_end, r_start, r_end, split
         else:
-            return self.arr[start:end]
+            return start, end, end, end, n
+        
+    def peek(self, n, offset=0):
+        l_start, l_end, r_start, r_end, split = self.get_indices(n, offset, self.ridx)
+            
+        out = np.zeros(n)
+        
+        out[:split] = self.arr[l_start:l_end]
+        out[split:] = self.arr[r_start:r_end]
+            
+        return out
         
     def write(self, data, offset=0):
         n = data.size
-        
-        start = (self.widx + offset) % self.arr.size
-        end = start + n
-        
-        if end > self.arr.size:
-            l_start = start
-            l_end = self.arr.size
-            r_start = 0
-            r_end = end - self.arr.size
+        l_start, l_end, r_start, r_end, split = self.get_indices(n, offset, self.widx)
             
-            split = l_end - l_start
-            
-            self.arr[l_start:l_end] = data[:split] 
-            self.arr[r_start:r_end] = data[split:]
-        else:
-            self.arr[start:end] = data
+        self.arr[l_start:l_end] = data[:split] 
+        self.arr[r_start:r_end] = data[split:]
             
     def write_add(self, data, offset=0):
         n = data.size
-        
-        start = (self.widx + offset) % self.arr.size
-        end = start + n
-        
-        if end > self.arr.size:
-            l_start = start
-            l_end = self.arr.size
-            r_start = 0
-            r_end = end - self.arr.size
+        l_start, l_end, r_start, r_end, split = self.get_indices(n, offset, self.widx)
             
-            split = l_end - l_start
-            
-            self.arr[l_start:l_end] += data[:split] 
-            self.arr[r_start:r_end] += data[split:]
-        else:
-            self.arr[start:end] += data
+        self.arr[l_start:l_end] += data[:split] 
+        self.arr[r_start:r_end] += data[split:]
         
     def radvance(self, n):
         self.ridx = (self.ridx + n) % self.arr.size
