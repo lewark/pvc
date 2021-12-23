@@ -18,7 +18,7 @@ Currently, pitch shifting is performed using a naive linear interpolation of the
 
 ## References
 
-Bernsee, Stephan M. "On the Importance of Formants in Pitch Shifting." 6 Feb. 2000, [blogs.zynaptiq.com/bernsee/formants-pitch-shifting/](http://blogs.zynaptiq.com/bernsee/formants-pitch-shifting/).
+Bernsee, Stephan M. "On the Importance of Formants in Pitch Shifting." *Stephan Bernsee's Blog,* 6 Feb. 2000, [blogs.zynaptiq.com/bernsee/formants-pitch-shifting/](http://blogs.zynaptiq.com/bernsee/formants-pitch-shifting/).
 
 Bernsee, Stephan M. "Pitch Shifting Using The Fourier Transform." *Stephan Bernsee's Blog,* 21 Sep. 1999, [blogs.zynaptiq.com/bernsee/pitch-shifting-using-the-ft/](http://blogs.zynaptiq.com/bernsee/pitch-shifting-using-the-ft/).
 
