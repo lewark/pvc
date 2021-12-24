@@ -81,7 +81,7 @@ class PVCJack:
         # NOTE: this might not work when window size isn't even multiple of JACK block size
         self.outbuffer.widx = self.outbuffer.arr.size // 2
 
-        self.pvc = pvc.PitchShifter(self.client.samplerate, self.window_size, 1, 1, True, 8)
+        self.pvc = pvc.PeakShifter(self.client.samplerate, self.window_size, 1, 1, False, 8)
         
         self.client.set_process_callback(self.process)
         self.client.set_shutdown_callback(self.shutdown)
@@ -135,11 +135,17 @@ class GUI:
         self.create_slider(self.set_pitch, "pitch")
         self.create_slider(self.set_formant, "formant")
         
+        self.tk.bind("<Return>",self.reset_phase)
+        
     def set_pitch(self, x):
         self.pvc_jack.pvc.pitch_mult = float(x)
     
     def set_formant(self, x):
         self.pvc_jack.pvc.f_pitch_mult = float(x)
+        
+    def reset_phase(self, evt):
+        print("reset phase")
+        self.pvc_jack.pvc.last_phase_out = np.array(self.pvc_jack.pvc.last_phase)
         
     def create_slider(self,cmd,name):
         i = len(self.sliders)
@@ -148,7 +154,7 @@ class GUI:
         self.labels.append(label)
         label.grid(row=i,column=0,sticky="SE")
         
-        slider = tkinter.Scale(self.tk, from_=0.1, to=4, resolution=0.01, orient=tkinter.HORIZONTAL, command=cmd)
+        slider = tkinter.Scale(self.tk, from_=0.1, to=4, resolution=0.1, orient=tkinter.HORIZONTAL, command=cmd)
         slider.set(1)
         self.sliders.append(slider)
         slider.grid(row=i,column=1,sticky="EW")
