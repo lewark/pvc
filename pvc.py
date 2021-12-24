@@ -194,14 +194,32 @@ class PitchShifter(PhaseVocoder):
         if self.pitch_mult != 1:
             # stretch or squeeze in the frequency domain to perform pitch shifting
             # this works fine for integer multiples but causes phase artifacts otherwise
-            magnitude = np.interp(
-                self.indices / self.pitch_mult, self.indices, magnitude, 0, 0
-            )
-            frequency = (
-                np.interp(self.indices / self.pitch_mult, self.indices, frequency, 0, 0)
-                * self.pitch_mult
-            )
+            #magnitude = np.interp(
+            #    self.indices / self.pitch_mult, self.indices, magnitude, 0, 0
+            #)
+            #frequency = (
+            #    np.interp(self.indices / self.pitch_mult, self.indices, frequency, 0, 0)
+            #    * self.pitch_mult
+            #)
             # phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
+            
+            # https://stackoverflow.com/questions/4364823/how-do-i-obtain-the-frequencies-of-each-value-in-an-fft
+            # Frequency: F = i * Fs / N
+            # i = F * N / Fs
+            
+            new_freq = frequency * self.pitch_mult
+            target_bins = np.round(new_freq * self.blocksize / self.samplerate).astype(int)
+            
+            valid = (target_bins < self.fft_size)
+            
+            new_mag = np.zeros(magnitude.size)
+            new_freq_scaled = np.zeros(frequency.size)
+            
+            new_mag[target_bins[valid]] = magnitude[valid]
+            new_freq_scaled[target_bins[valid]] = new_freq[valid]
+            
+            magnitude = new_mag
+            frequency = new_freq_scaled
 
         if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
             # re-apply the formants
