@@ -161,7 +161,7 @@ class PhaseVocoder:
 
 class PitchShifter(PhaseVocoder):
     def __init__(
-        self, samplerate, blocksize, pitch_mult, f_pitch_mult, f_corr, f_filter_size
+        self, samplerate, blocksize, pitch_mult, f_pitch_mult, f_corr, f_filter_size, linear,
     ):
         super().__init__(samplerate, blocksize)
         self.indices = np.arange(self.fft_size)
@@ -169,6 +169,8 @@ class PitchShifter(PhaseVocoder):
         self.f_pitch_mult = f_pitch_mult
         self.f_corr = f_corr
         self.f_filter_size = f_filter_size
+        
+        self.linear = linear
 
     def process(self, block, in_shift, out_shift):
         magnitude, phase, frequency = self.analyze(block, in_shift)
@@ -187,121 +189,45 @@ class PitchShifter(PhaseVocoder):
             # plt.show()
 
             if self.f_pitch_mult != 1:
+                # todo: try doing this using discrete method?
                 contour = np.interp(
                     self.indices / self.f_pitch_mult, self.indices, contour, 0, 0
                 )
 
         if self.pitch_mult != 1:
-            # stretch or squeeze in the frequency domain to perform pitch shifting
-            # this works fine for integer multiples but causes phase artifacts otherwise
-            #magnitude = np.interp(
-            #    self.indices / self.pitch_mult, self.indices, magnitude, 0, 0
-            #)
-            #frequency = (
-            #    np.interp(self.indices / self.pitch_mult, self.indices, frequency, 0, 0)
-            #    * self.pitch_mult
-            #)
-            # phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
-            
-            # https://stackoverflow.com/questions/4364823/how-do-i-obtain-the-frequencies-of-each-value-in-an-fft
-            # Frequency: F = i * Fs / N
-            # i = F * N / Fs
-            
-            new_freq = frequency * self.pitch_mult
-            target_bins = np.round(new_freq * self.blocksize / self.samplerate).astype(int)
-            
-            valid = (target_bins < self.fft_size)
-            
-            new_mag = np.zeros(magnitude.size)
-            new_freq_scaled = np.zeros(frequency.size)
-            
-            new_mag[target_bins[valid]] = magnitude[valid]
-            new_freq_scaled[target_bins[valid]] = new_freq[valid]
-            
-            magnitude = new_mag
-            frequency = new_freq_scaled
-
-        if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
-            # re-apply the formants
-            magnitude = magnitude * contour
-
-        out_block = self.synthesize(magnitude, frequency, out_shift)
-        return out_block
-
-
-class PeakShifter(PhaseVocoder):
-    def __init__(
-        self, samplerate, blocksize, pitch_mult, f_pitch_mult, f_corr, f_filter_size
-    ):
-        super().__init__(samplerate, blocksize)
-        self.indices = np.arange(self.fft_size)
-        self.pitch_mult = pitch_mult
-        self.f_pitch_mult = f_pitch_mult
-        self.f_corr = f_corr
-        self.f_filter_size = f_filter_size
-
-    def process(self, block, in_shift, out_shift):
-        magnitude, phase, frequency = self.analyze(block, in_shift)
-
-        contour = None
-        if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
-            contour = np.maximum(
-                scipy.ndimage.maximum_filter1d(magnitude, self.f_filter_size), 0.001
-            )
-
-            # divide the formants out of the signal, leaving the smaller-scale peaks
-            magnitude = magnitude / contour
-
-            if self.f_pitch_mult != 1:
-                contour = np.interp(
-                    self.indices / self.f_pitch_mult, self.indices, contour, 0, 0
+            if self.linear:
+                # stretch or squeeze in the frequency domain to perform pitch shifting
+                # this works fine for integer multiples but causes phase artifacts otherwise
+                magnitude = np.interp(
+                    self.indices / self.pitch_mult, self.indices, magnitude, 0, 0
                 )
-
-        if self.pitch_mult != 1:
-            peaks, props = scipy.signal.find_peaks(magnitude,width=4)
-            
-            peak_start = []
-            peak_end = []
-            
-            for i,peak in enumerate(peaks):
-                start = 0
-                if i != 0:
-                    start = np.argmin(magnitude[peaks[i-1]:peak])
-                    peak_end.append(start)
-                peak_start.append(start)
-            peak_end.append(magnitude.size)
-            
-            mag_new = np.zeros(magnitude.size)
-            freq_new = np.zeros(frequency.size)
-            #mask = np.zeros(frequency.size)
-            
-            for peak, start, end in zip(peaks, peak_start, peak_end):
+                frequency = (
+                    np.interp(self.indices / self.pitch_mult, self.indices, frequency, 0, 0)
+                    * self.pitch_mult
+                )
+                # phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
+            else:
                 # https://stackoverflow.com/questions/4364823/how-do-i-obtain-the-frequencies-of-each-value-in-an-fft
                 # Frequency: F = i * Fs / N
                 # i = F * N / Fs
-                old_freq = frequency[peak]
-                new_freq = old_freq * self.pitch_mult
-                new_peak = round(new_freq * self.blocksize / self.samplerate)
                 
-                offset = new_peak - peak
+                # discrete pitch scaling seems to reduce phase artifacts in some cases
+                # however, it still seems to be an issue when using formant shift
+                new_freq = frequency * self.pitch_mult
+                target_bins = np.round(new_freq * self.blocksize / self.samplerate).astype(int)
                 
-                new_start = start + offset
-                new_end = end + offset
+                valid = (target_bins < self.fft_size)
                 
-                if new_start < self.fft_size and new_end >= 0:
+                new_mag = np.zeros(magnitude.size)
+                new_freq_scaled = np.zeros(frequency.size)
                 
-                    if new_start < 0:
-                        start -= new_start
-                        new_start = 0
-                    if new_end > self.fft_size:
-                        end -= (new_end - self.fft_size)
-                        new_end = self.fft_size
+                # TODO: try using a for loop for better behavior with pitch mult < 1
+                new_mag[target_bins[valid]] = magnitude[valid]
+                new_freq_scaled[target_bins[valid]] = new_freq[valid] #* magnitude[valid]
+                #new_freq_scaled[new_mag > 0] /= new_mag[new_mag > 0]
                 
-                    mag_new[new_start:new_end] += magnitude[start:end]
-                    # todo: weighted average these?
-                    freq_new[new_start:new_end] = frequency[start:end] + new_freq - old_freq
-            magnitude = mag_new
-            frequency = freq_new
+                magnitude = new_mag
+                frequency = new_freq_scaled
 
         if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
             # re-apply the formants
@@ -322,6 +248,7 @@ class FileProcessor:
         f_pitch_mult=D_F_PITCH_MULT,
         f_filter_size=D_F_FILTER_SIZE,
         f_corr=D_F_CORR,
+        linear=False,
     ):
         self.block_size = block_size
         self.n_blocks = n_blocks
@@ -354,6 +281,7 @@ class FileProcessor:
                 self.f_pitch_mult,
                 self.f_corr,
                 self.f_filter_size,
+                linear,
             )
             for i in range(self.in_file.channels)
         ]
@@ -438,6 +366,12 @@ if __name__ == "__main__":
         default=D_F_FILTER_SIZE,
         help="the size of the filter window to use when identifying formants",
     )
+    parser.add_argument(
+        "-L",
+        "--linear",
+        action="store_true",
+        help="use linear interpolation on frequency spectrum",
+    )
 
     args = parser.parse_args()
 
@@ -450,6 +384,7 @@ if __name__ == "__main__":
         args.formant_mult,
         args.formant_filter,
         args.formant_corr,
+        args.linear,
     )
     processor.run()
     processor.write(args.out_file)
