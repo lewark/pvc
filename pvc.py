@@ -4,7 +4,7 @@ import numpy as np
 import scipy.signal
 import soundfile
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 # Default parameters
 D_BLOCK_SIZE = 4096
@@ -82,53 +82,6 @@ class PhaseVocoder:
 
         return min_f
 
-    def est_freqs_bruteforce(self, phase, dt):
-        min_diff = None
-        min_f2 = np.zeros(self.freq.size)
-        n = 0
-        while True:
-            fn = (phase - self.last_phase + 2 * np.pi * n) / (2 * np.pi * dt)
-            diff = np.abs(fn - self.freq)
-
-            if min_diff is None:
-                min_diff = diff
-                min_f2 = fn
-            else:
-                success = diff <= min_diff
-                min_diff[success] = diff[success]
-                min_f2[success] = fn[success]
-
-            if (fn > self.freq).all():
-                break
-
-            n += 1
-        return min_f2
-
-    """
-    def window_out(self, magnitude, phase):
-        # TODO: figure out why this isn't working
-        extrema = scipy.signal.argrelextrema(magnitude, np.greater)
-        for peak in extrema[0]:
-            n = 1
-            while (peak - n >= 0):
-                i = peak - n
-                value = magnitude[i]
-                if n > 1 and value > last_value:
-                    break
-                last_value = value
-                phase[i] = (phase[peak] + np.pi * (i % 2))
-                n += 1
-            n = 1
-            while (peak + n < phase.size):
-                i = peak + n
-                value = magnitude[i]
-                if n > 1 and value > last_value:
-                    break
-                last_value = value
-                phase[i] = (phase[peak] + np.pi * (i % 2))
-                n += 1
-    """
-
     def constrain_phase(self, phase):
         return ((phase + np.pi) % (np.pi * 2)) - np.pi
 
@@ -136,30 +89,77 @@ class PhaseVocoder:
         dt = advance / self.samplerate
 
         out_phase = self.last_phase_out + 2 * np.pi * frequency * dt
-        self.last_phase_out = out_phase
 
-        # self.window_out(magnitude, out_phase)
         out_phase = self.constrain_phase(out_phase)
+        
+        self.last_phase_out = out_phase
 
         fft = magnitude * np.exp(1j * out_phase)
 
         out_block = np.fft.irfft(fft) * self.window
 
-        """#plt.subplot(311)
-        ax1 = plt.subplot(311)
-        #plt.plot(phase)
-        #ax2 = plt.subplot(212,sharex=ax1,sharey=ax1)
-        plt.plot(out_phase)
-        ax3 = plt.subplot(312,sharex=ax1)
-        plt.plot(magnitude)
-        plt.subplot(313)
-        plt.plot(out_block)
-        plt.show()"""
-
         return out_block
 
+class PeakPhaseVocoder(PhaseVocoder):
+    def analyze(self, block, advance):
+        magnitude, phase, freq = super().analyze(block, advance)
+        
+        #peak_pos, prop = scipy.signal.find_peaks(magnitude, width=9)
+        peak_pos = scipy.signal.argrelextrema(magnitude, np.greater, order=4)[0]
+        #print(peak_pos)
+        
+        peak_start = []
+        peak_end = []
+        
+        for i,peak in enumerate(peak_pos):
+            start = 0
+            if i != 0:
+                start = np.argmin(magnitude[peak_pos[i-1]:peak])
+                #start = (peak_pos[i-1] + peak) // 2
+                peak_end.append(start)
+            peak_start.append(start)
+        peak_end.append(magnitude.size)
+        
+        #plt.plot(magnitude)
+        #plt.scatter(peak_pos, magnitude[peak_pos])
+        #plt.show()
+        
+        return magnitude, phase, freq, list(zip(peak_pos, peak_start, peak_end))
+    
+    def synthesize(self, magnitude, phase, frequency, peaks, in_adv, out_adv):
+        dt = out_adv / self.samplerate
+
+        out_phase = np.zeros(phase.size)
+        
+        alpha = out_adv / in_adv
+        # TODO: Also try beta = 1
+        beta = alpha
+        
+        for peak, peak_start, peak_end in peaks:
+            #print (peak, peak_start, peak_end)
+            #print(phase[peak_start:peak].size)
+            # TODO: find moving peaks across frames?
+            peak_phase = self.last_phase_out[peak] + 2 * np.pi * frequency[peak] * dt
+            #print(peak_phase)
+            # force-lock partial phases to the peak phase
+            out_phase[peak_start:peak] = peak_phase + beta * (phase[peak_start:peak] - phase[peak])
+            out_phase[peak+1:peak_end] = peak_phase + beta * (phase[peak+1:peak_end] - phase[peak])
+            out_phase[peak] = peak_phase
+
+        out_phase = self.constrain_phase(out_phase)
+        
+        self.last_phase_out = out_phase
+
+        # self.window_out(magnitude, out_phase)
+
+        fft = magnitude * np.exp(1j * out_phase)
+
+        out_block = np.fft.irfft(fft) * self.window
+        
+        return out_block
 
 class PitchShifter(PhaseVocoder):
+    """Pitch-shifts the input signal"""
     def __init__(
         self, samplerate, blocksize, pitch_mult, f_pitch_mult, f_corr, f_filter_size, linear,
     ):
@@ -237,6 +237,101 @@ class PitchShifter(PhaseVocoder):
         return out_block
 
 
+class PeakPitchShifter(PeakPhaseVocoder):
+    """Pitch shifts the input signal with frequencies phase-locked to peaks"""
+    def __init__(
+        self, samplerate, blocksize, pitch_mult, f_pitch_mult, f_corr, f_filter_size,
+    ):
+        super().__init__(samplerate, blocksize)
+        self.indices = np.arange(self.fft_size)
+        self.pitch_mult = pitch_mult
+        self.f_pitch_mult = f_pitch_mult
+        self.f_corr = f_corr
+        self.f_filter_size = f_filter_size
+        
+    def process(self, block, in_shift, out_shift):
+        magnitude, phase, frequency, peaks = self.analyze(block, in_shift)
+
+        contour = None
+        if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
+            contour = np.maximum(
+                scipy.ndimage.maximum_filter1d(magnitude, self.f_filter_size), 0.001
+            )
+
+            # divide the formants out of the signal, leaving the smaller-scale peaks
+            magnitude = magnitude / contour
+
+            # plt.plot(contour)
+            # plt.plot(magnitude)
+            # plt.show()
+
+            if self.f_pitch_mult != 1:
+                # todo: try doing this using discrete method?
+                contour = np.interp(
+                    self.indices / self.f_pitch_mult, self.indices, contour, 0, 0
+                )
+
+        if self.pitch_mult != 1:
+            # https://stackoverflow.com/questions/4364823/how-do-i-obtain-the-frequencies-of-each-value-in-an-fft
+            # Frequency: F = i * Fs / N
+            # i = F * N / Fs
+            
+            # discrete pitch scaling seems to reduce phase artifacts in some cases
+            new_freq = frequency * self.pitch_mult
+            target_bins = np.round(new_freq * self.blocksize / self.samplerate).astype(int)
+            
+            valid = (target_bins < self.fft_size)
+            
+            new_mag = np.zeros(magnitude.size)
+            new_phase = np.zeros(phase.size)
+            new_freq_scaled = np.zeros(frequency.size)
+            
+            # Remap the PVC bins to apply pitch shift
+            # TODO: try using a for loop for better behavior with pitch mult < 1
+            new_mag[target_bins[valid]] = magnitude[valid]
+            new_phase[target_bins[valid]] = phase[valid]
+            new_freq_scaled[target_bins[valid]] = new_freq[valid] #* magnitude[valid]
+            #new_freq_scaled[new_mag > 0] /= new_mag[new_mag > 0]
+            
+            new_peaks = []
+            # Remap peak bin indexes
+            for peak in peaks:
+                peak_pos = peak[0]
+                peak_start = peak[1]
+                peak_end = peak[2]
+                
+                if peak_pos < target_bins.size:
+                    peak_pos = target_bins[peak_pos]
+                if peak_start < target_bins.size:
+                    peak_start = target_bins[peak_start]
+                if peak_end < target_bins.size:
+                    peak_end = target_bins[peak_end]
+                
+                #print(peak_pos, peak_start, peak_end)
+                
+                if peak_pos >= magnitude.size or peak_start >= magnitude.size:
+                    if len(new_peaks) > 0:
+                        new_peaks[-1][2] = magnitude.size
+                    continue
+                
+                if peak_end > magnitude.size:
+                    peak_end = magnitude.size
+                    
+                new_peaks.append([peak_pos, peak_start, peak_end])
+            
+            peaks = new_peaks
+            magnitude = new_mag
+            phase = new_phase
+            frequency = new_freq_scaled
+
+        if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
+            # re-apply the formants
+            magnitude = magnitude * contour
+
+        out_block = self.synthesize(magnitude, phase, frequency, peaks, in_shift, out_shift)
+        return out_block
+
+
 class FileProcessor:
     def __init__(
         self,
@@ -248,7 +343,6 @@ class FileProcessor:
         f_pitch_mult=D_F_PITCH_MULT,
         f_filter_size=D_F_FILTER_SIZE,
         f_corr=D_F_CORR,
-        linear=False,
     ):
         self.block_size = block_size
         self.n_blocks = n_blocks
@@ -274,14 +368,13 @@ class FileProcessor:
         self.out_data = np.zeros((self.out_length, self.in_file.channels))
 
         self.pvc = [
-            PitchShifter(
+            PeakPitchShifter(
                 self.rate,
                 self.block_size,
                 self.pitch_mult,
                 self.f_pitch_mult,
                 self.f_corr,
-                self.f_filter_size,
-                linear,
+                self.f_filter_size
             )
             for i in range(self.in_file.channels)
         ]
@@ -366,12 +459,6 @@ if __name__ == "__main__":
         default=D_F_FILTER_SIZE,
         help="the size of the filter window to use when identifying formants",
     )
-    parser.add_argument(
-        "-L",
-        "--linear",
-        action="store_true",
-        help="use linear interpolation on frequency spectrum",
-    )
 
     args = parser.parse_args()
 
@@ -384,7 +471,6 @@ if __name__ == "__main__":
         args.formant_mult,
         args.formant_filter,
         args.formant_corr,
-        args.linear,
     )
     processor.run()
     processor.write(args.out_file)
