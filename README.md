@@ -14,7 +14,7 @@ python3 pvc.py --help
 
 ## Limitations
 
-Currently, pitch shifting is performed using a naive linear interpolation of the frequency spectrum. This works fine for integer multiples of the current frequency but results in phase artifacts with non-integer pitch scales.
+Currently, this phase vocoder runs into significant phase artifacts when pitch-shifting audio by a non-integer ratio. This issue is reduced a bit by phase-locking frequencies to nearby peaks but is still not completely resolved. 
 
 ## References
 
@@ -27,5 +27,7 @@ De Götzen, Amalia, et al. "Traditional (?) Implementations of a Phase-Vocoder: 
 Dudas, Richard, and Cort Lippe. "The Phase Vocoder - Part I." *Cycling '74,* 2 Nov. 2006, [cycling74.com/tutorials/the-phase-vocoder-%E2%80%93-part-i](https://cycling74.com/tutorials/the-phase-vocoder-%E2%80%93-part-i).
 
 Ellis, Dan. "A Phase Vocoder in Matlab." *Dan Ellis's Home Page,* 2002, [www.ee.columbia.edu/~dpwe/resources/matlab/pvoc/](https://www.ee.columbia.edu/~dpwe/resources/matlab/pvoc/).
+
+Laroche, Jean, and Mark Dolson. "Phase-Vocoder: About this phasiness business." *ResearchGate,* Nov. 1997, [www.researchgate.net/publication/3714372_Phase-vocoder_about_this_phasiness_business](https://www.researchgate.net/publication/3714372_Phase-vocoder_about_this_phasiness_business).
 
 Sethares, William A. "A Phase Vocoder in Matlab." *sethares homepage,* [sethares.engr.wisc.edu/vocoders/phasevocoder.html](https://sethares.engr.wisc.edu/vocoders/phasevocoder.html).
