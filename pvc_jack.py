@@ -81,7 +81,7 @@ class PVCJack:
         # NOTE: this might not work when window size isn't even multiple of JACK block size
         self.outbuffer.widx = self.outbuffer.arr.size // 2
 
-        self.pvc = pvc.PitchShifter(self.client.samplerate, self.window_size, 1, 1, False, 8)
+        self.pvc = pvc.PeakPitchShifter(self.client.samplerate, self.window_size, 1, 1, False, 8)
         
         self.client.set_process_callback(self.process)
         self.client.set_shutdown_callback(self.shutdown)
