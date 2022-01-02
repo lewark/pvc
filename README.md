@@ -1,6 +1,6 @@
 # pvc
 
-This is a simple phase vocoder implementation written in Python. It can be used to time-stretch audio files. This program also implements independent pitch-shifting of audio in the frequency domain, with optional formant correction.
+This is a phase vocoder implementation written in Python. It can be used to time-stretch audio files. This program also implements independent pitch-shifting of audio in the frequency domain, with optional formant correction.
 
 Dependencies: numpy, scipy, SoundFile
 
@@ -14,7 +14,7 @@ python3 pvc.py --help
 
 ## Limitations
 
-Currently, this phase vocoder runs into significant phase artifacts when pitch-shifting audio by a non-integer ratio. This issue is reduced a bit by phase-locking frequencies to nearby peaks but is still not completely resolved. 
+Currently, this phase vocoder creates significant phase artifacts when pitch-shifting audio by a non-integer ratio. This issue can be reduced a bit by phase-locking frequencies to nearby peaks but is still not completely resolved. 
 
 ## References
 

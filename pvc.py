@@ -17,7 +17,8 @@ D_F_CORR = False
 
 MATCH_PEAKS = True
 PEAK_MAX_DIST = 16
-PEAK_THRESH=0.01
+PEAK_THRESH = 0.01
+
 
 class PhaseVocoder:
     def __init__(self, samplerate, blocksize):
@@ -42,17 +43,6 @@ class PhaseVocoder:
         dt = advance / self.samplerate
 
         min_f = self.est_freqs_div(phase, dt)
-        # min_f2 = self.est_freqs_bruteforce(phase, dt)
-
-        # err = np.abs(min_f2[1:] - min_f[1:])
-        # err_q = np.max(err)
-
-        # print(err)
-        # if err_q > 0.001:
-        #    err_i = np.argmax(err)
-        #    print("err")
-        #    #print("err",err_i, err_q, min_f[err_i], min_f2[err_i], self.freq[err_i])
-        #    #print("diff",np.max(np.abs(min_f - self.freq)),np.max(np.abs(min_f2 - self.freq)))
 
         self.last_phase = phase
 
@@ -61,27 +51,9 @@ class PhaseVocoder:
     def est_freqs_div(self, phase, dt):
         # TODO: This runs into problems at first bin, investigate
 
-        # fn = (phase - self.last_phase + 2 * np.pi * n)/(2 * np.pi * dt)
-        # solving for n:
-        # fn - (phase - last_phase) / (2 * np.pi * dt) = (2 * np.pi * n) / (2 * np.pi * dt)
-        # fn - (phase - last_phase) / (2 * np.pi * dt) = n / dt
-        # (fn - (phase - last_phase) / (2 * np.pi * dt)) * dt = n
-
         freq_base = (phase - self.last_phase) / (2 * np.pi * dt)
-        # n = np.round((self.freq - freq_base) / ((2 * np.pi) / (2 * np.pi * dt)))
-
         n = np.maximum(np.round((self.freq - freq_base) * dt), 0)
-        # print(n)
-        # print(freq_base, n, (n < 0).any())
-
-        # if (n < 0).any():
-        #    print("negative n", np.min(n), np.argmin(n))
-
         min_f = freq_base + (n / dt)
-
-        # if (min_f < 0).any():
-        #    i = np.argmin(min_f)
-        #    print("negative", np.min(min_f), i, n[i], freq_base[i], self.freq[i] - freq_base[i], 1/dt)
 
         return min_f
 
@@ -94,7 +66,7 @@ class PhaseVocoder:
         out_phase = self.last_phase_out + 2 * np.pi * frequency * dt
 
         out_phase = self.constrain_phase(out_phase)
-        
+
         self.last_phase_out = out_phase
 
         fft = magnitude * np.exp(1j * out_phase)
@@ -103,95 +75,100 @@ class PhaseVocoder:
 
         return out_block
 
+
 class PeakPhaseVocoder(PhaseVocoder):
     def __init__(self, samplerate, blocksize):
         super().__init__(samplerate, blocksize)
-        
+
         self.last_peaks = []
 
     def compare(self, a, b):
-        return np.greater(a, b+PEAK_THRESH)
+        return np.greater(a, b + PEAK_THRESH)
 
     def analyze(self, block, advance):
         magnitude, phase, freq = super().analyze(block, advance)
-        
-        #peak_pos, prop = scipy.signal.find_peaks(magnitude, width=9)
+
+        # peak_pos, prop = scipy.signal.find_peaks(magnitude, width=9)
         peak_pos = scipy.signal.argrelextrema(magnitude, self.compare, order=4)[0]
-        #print(peak_pos)
-        
+        # print(peak_pos)
+
         peak_start = []
         peak_end = []
-        
-        for i,peak in enumerate(peak_pos):
+
+        for i, peak in enumerate(peak_pos):
             start = 0
             if i != 0:
-                start = np.argmin(magnitude[peak_pos[i-1]:peak])
-                #start = (peak_pos[i-1] + peak) // 2
+                start = np.argmin(magnitude[peak_pos[i - 1] : peak])
+                # start = (peak_pos[i-1] + peak) // 2
                 peak_end.append(start)
             peak_start.append(start)
         peak_end.append(magnitude.size)
-        
-        #plt.plot(magnitude)
-        #plt.scatter(peak_pos, magnitude[peak_pos])
-        #plt.show()
-        
+
+        # plt.plot(magnitude)
+        # plt.scatter(peak_pos, magnitude[peak_pos])
+        # plt.show()
+
         return magnitude, phase, freq, list(zip(peak_pos, peak_start, peak_end))
-    
+
     def synthesize(self, magnitude, phase, frequency, peaks, in_adv, out_adv):
         dt = out_adv / self.samplerate
-        
+
         out_phase = np.zeros(phase.size)
-        
+
         alpha = out_adv / in_adv
         # TODO: Also try beta = 1
         beta = alpha
-        #print("last",self.last_peaks)
+        # print("last",self.last_peaks)
         for peak, peak_start, peak_end in peaks:
-            #print (peak, peak_start, peak_end)
-            #print(phase[peak_start:peak].size)            
             old_peak = peak
-            
-            #print("moving peaks")
-            #print(self.last_peaks, peaks)
+
             if MATCH_PEAKS:
-                #print("checking for matches")
                 min_dist = None
                 for last_peak, lp_start, lp_end in self.last_peaks:
                     dist = abs(peak - last_peak)
-                    #print(dist)
+                    # print(dist)
                     if (min_dist == None or dist < min_dist) and dist <= PEAK_MAX_DIST:
                         min_dist = dist
                         old_peak = last_peak
-                    #print("checked")
-                #if min_dist != None:
-                #    print("match",peak,old_peak)
-            
-            peak_phase = self.last_phase_out[old_peak] + 2 * np.pi * frequency[peak] * dt
-            #print(peak_phase)
+
+            peak_phase = (
+                self.last_phase_out[old_peak] + 2 * np.pi * frequency[peak] * dt
+            )
             # force-lock partial phases to the peak phase
-            out_phase[peak_start:peak] = peak_phase + beta * (phase[peak_start:peak] - phase[peak])
-            out_phase[peak+1:peak_end] = peak_phase + beta * (phase[peak+1:peak_end] - phase[peak])
+            out_phase[peak_start:peak] = peak_phase + beta * (
+                phase[peak_start:peak] - phase[peak]
+            )
+            out_phase[peak + 1 : peak_end] = peak_phase + beta * (
+                phase[peak + 1 : peak_end] - phase[peak]
+            )
             out_phase[peak] = peak_phase
 
         out_phase = self.constrain_phase(out_phase)
-        
+
         self.last_phase_out = out_phase
-        #print(peaks)
         self.last_peaks = peaks
-        #print(self.last_peaks)
 
         # self.window_out(magnitude, out_phase)
 
         fft = magnitude * np.exp(1j * out_phase)
 
         out_block = np.fft.irfft(fft) * self.window
-        
+
         return out_block
+
 
 class PitchShifter(PhaseVocoder):
     """Pitch-shifts the input signal"""
+
     def __init__(
-        self, samplerate, blocksize, pitch_mult, f_pitch_mult, f_corr, f_filter_size, linear,
+        self,
+        samplerate,
+        blocksize,
+        pitch_mult,
+        f_pitch_mult,
+        f_corr,
+        f_filter_size,
+        linear,
     ):
         super().__init__(samplerate, blocksize)
         self.indices = np.arange(self.fft_size)
@@ -199,7 +176,7 @@ class PitchShifter(PhaseVocoder):
         self.f_pitch_mult = f_pitch_mult
         self.f_corr = f_corr
         self.f_filter_size = f_filter_size
-        
+
         self.linear = linear
 
     def process(self, block, in_shift, out_shift):
@@ -232,7 +209,9 @@ class PitchShifter(PhaseVocoder):
                     self.indices / self.pitch_mult, self.indices, magnitude, 0, 0
                 )
                 frequency = (
-                    np.interp(self.indices / self.pitch_mult, self.indices, frequency, 0, 0)
+                    np.interp(
+                        self.indices / self.pitch_mult, self.indices, frequency, 0, 0
+                    )
                     * self.pitch_mult
                 )
                 # phase = np.interp(indices/pitch_mult,indices,fft_phase,period=np.pi*2)
@@ -240,22 +219,26 @@ class PitchShifter(PhaseVocoder):
                 # https://stackoverflow.com/questions/4364823/how-do-i-obtain-the-frequencies-of-each-value-in-an-fft
                 # Frequency: F = i * Fs / N
                 # i = F * N / Fs
-                
+
                 # discrete pitch scaling seems to reduce phase artifacts in some cases
                 # however, it still seems to be an issue when using formant shift
                 new_freq = frequency * self.pitch_mult
-                target_bins = np.round(new_freq * self.blocksize / self.samplerate).astype(int)
-                
-                valid = (target_bins < self.fft_size)
-                
+                target_bins = np.round(
+                    new_freq * self.blocksize / self.samplerate
+                ).astype(int)
+
+                valid = target_bins < self.fft_size
+
                 new_mag = np.zeros(magnitude.size)
                 new_freq_scaled = np.zeros(frequency.size)
-                
+
                 # TODO: try using a for loop for better behavior with pitch mult < 1
                 new_mag[target_bins[valid]] = magnitude[valid]
-                new_freq_scaled[target_bins[valid]] = new_freq[valid] #* magnitude[valid]
-                #new_freq_scaled[new_mag > 0] /= new_mag[new_mag > 0]
-                
+                new_freq_scaled[target_bins[valid]] = new_freq[
+                    valid
+                ]  # * magnitude[valid]
+                # new_freq_scaled[new_mag > 0] /= new_mag[new_mag > 0]
+
                 magnitude = new_mag
                 frequency = new_freq_scaled
 
@@ -269,8 +252,15 @@ class PitchShifter(PhaseVocoder):
 
 class PeakPitchShifter(PeakPhaseVocoder):
     """Pitch shifts the input signal with frequencies phase-locked to peaks"""
+
     def __init__(
-        self, samplerate, blocksize, pitch_mult, f_pitch_mult, f_corr, f_filter_size,
+        self,
+        samplerate,
+        blocksize,
+        pitch_mult,
+        f_pitch_mult,
+        f_corr,
+        f_filter_size,
     ):
         super().__init__(samplerate, blocksize)
         self.indices = np.arange(self.fft_size)
@@ -278,7 +268,7 @@ class PeakPitchShifter(PeakPhaseVocoder):
         self.f_pitch_mult = f_pitch_mult
         self.f_corr = f_corr
         self.f_filter_size = f_filter_size
-        
+
     def process(self, block, in_shift, out_shift):
         magnitude, phase, frequency, peaks = self.analyze(block, in_shift)
 
@@ -294,7 +284,7 @@ class PeakPitchShifter(PeakPhaseVocoder):
             # plt.plot(contour)
             # plt.plot(magnitude)
             # plt.show()
-            #print(self.f_pitch_mult)
+            # print(self.f_pitch_mult)
             if self.f_pitch_mult != 1:
                 # todo: try doing this using discrete method?
                 contour = np.interp(
@@ -305,24 +295,26 @@ class PeakPitchShifter(PeakPhaseVocoder):
             # https://stackoverflow.com/questions/4364823/how-do-i-obtain-the-frequencies-of-each-value-in-an-fft
             # Frequency: F = i * Fs / N
             # i = F * N / Fs
-            
+
             # discrete pitch scaling seems to reduce phase artifacts in some cases
             new_freq = frequency * self.pitch_mult
-            target_bins = np.round(new_freq * self.blocksize / self.samplerate).astype(int)
-            
-            valid = (target_bins < self.fft_size)
-            
+            target_bins = np.round(new_freq * self.blocksize / self.samplerate).astype(
+                int
+            )
+
+            valid = target_bins < self.fft_size
+
             new_mag = np.zeros(magnitude.size)
             new_phase = np.zeros(phase.size)
             new_freq_scaled = np.zeros(frequency.size)
-            
+
             # Remap the PVC bins to apply pitch shift
             # TODO: try using a for loop for better behavior with pitch mult < 1
             new_mag[target_bins[valid]] = magnitude[valid]
             new_phase[target_bins[valid]] = phase[valid]
-            new_freq_scaled[target_bins[valid]] = new_freq[valid] #* magnitude[valid]
-            #new_freq_scaled[new_mag > 0] /= new_mag[new_mag > 0]
-            
+            new_freq_scaled[target_bins[valid]] = new_freq[valid]  # * magnitude[valid]
+            # new_freq_scaled[new_mag > 0] /= new_mag[new_mag > 0]
+
             new_peaks = []
             # Remap peak bin indexes
             # TODO: deal with bin overlap when shifting downward
@@ -330,26 +322,26 @@ class PeakPitchShifter(PeakPhaseVocoder):
                 peak_pos = peak[0]
                 peak_start = peak[1]
                 peak_end = peak[2]
-                
+
                 if peak_pos < target_bins.size:
                     peak_pos = target_bins[peak_pos]
                 if peak_start < target_bins.size:
                     peak_start = target_bins[peak_start]
                 if peak_end < target_bins.size:
                     peak_end = target_bins[peak_end]
-                
-                #print(peak_pos, peak_start, peak_end)
-                
+
+                # print(peak_pos, peak_start, peak_end)
+
                 if peak_pos >= magnitude.size or peak_start >= magnitude.size:
                     if len(new_peaks) > 0:
                         new_peaks[-1][2] = magnitude.size
                     continue
-                
+
                 if peak_end > magnitude.size:
                     peak_end = magnitude.size
-                    
+
                 new_peaks.append([peak_pos, peak_start, peak_end])
-            
+
             peaks = new_peaks
             magnitude = new_mag
             phase = new_phase
@@ -359,7 +351,9 @@ class PeakPitchShifter(PeakPhaseVocoder):
             # re-apply the formants
             magnitude = magnitude * contour
 
-        out_block = self.synthesize(magnitude, phase, frequency, peaks, in_shift, out_shift)
+        out_block = self.synthesize(
+            magnitude, phase, frequency, peaks, in_shift, out_shift
+        )
         return out_block
 
 
@@ -405,7 +399,7 @@ class FileProcessor:
                 self.pitch_mult,
                 self.f_pitch_mult,
                 self.f_corr,
-                self.f_filter_size
+                self.f_filter_size,
             )
             for i in range(self.in_file.channels)
         ]
