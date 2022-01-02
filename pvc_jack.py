@@ -1,10 +1,9 @@
-import threading
 import tkinter
 
 import numpy as np
 import jack
 
-import pvc
+import pitchshift
 
 
 class CircularBuffer:
@@ -71,8 +70,7 @@ class PVCJack:
         self.client = jack.Client("PVCJack")
         self.client.inports.register("input")
         self.client.outports.register("output")
-        self.event = threading.Event()
-        self.window_size = 4096
+        self.window_size = 2048
         self.n_windows = 4
 
         self.gain = 2
@@ -84,8 +82,8 @@ class PVCJack:
 
         print("Sample rate:", self.client.samplerate)
 
-        # self.pvc = pvc.PeakPitchShifter(self.client.samplerate, self.window_size, 2, 1, True, 8)
-        self.pvc = pvc.PitchShifter(
+        # self.pvc = pitchshift.PeakPitchShifter(self.client.samplerate, self.window_size, 2, 1, True, 8)
+        self.pvc = pitchshift.PitchShifter(
             self.client.samplerate, self.window_size, 2, 1, True, 8, True
         )
 
@@ -93,6 +91,8 @@ class PVCJack:
         self.client.set_shutdown_callback(self.shutdown)
 
     def process(self, frames):
+        # TODO: This breaks if client.blocksize is bigger than window_size
+        assert self.client.blocksize <= self.window_size
         assert frames == self.client.blocksize
         data = self.client.inports[0].get_array()
         self.inbuffer.write(data)
@@ -118,14 +118,6 @@ class PVCJack:
         print("JACK shutdown!")
         print("status:", status)
         print("reason:", reason)
-        self.event.set()
-
-    def run(self):
-        with self.client:
-            try:
-                self.event.wait()
-            except KeyboardInterrupt:
-                print("Interrupted by user")
 
 
 class GUI:
@@ -139,8 +131,8 @@ class GUI:
 
         self.tk.columnconfigure(1, weight=1)
 
-        self.create_slider(self.set_pitch, "pitch", 2)
-        self.create_slider(self.set_formant, "formant", 1)
+        self.create_slider(self.set_pitch, "pitch", self.pvc_jack.pvc.pitch_mult)
+        self.create_slider(self.set_formant, "formant", self.pvc_jack.pvc.f_pitch_mult)
 
         self.tk.bind("<Return>", self.reset_phase)
 
