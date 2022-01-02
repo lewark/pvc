@@ -161,7 +161,9 @@ class TimeDomainPitchShifter(phasevocoder.PhaseVocoder):
 
 
 class PeakPitchShifter(phasevocoder.PeakPhaseVocoder):
-    """Pitch shifts the input signal with frequencies phase-locked to peaks"""
+    """
+    Pitch shifts the input signal with frequencies phase-locked to peaks
+    """
 
     def __init__(
         self,

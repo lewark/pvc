@@ -22,11 +22,7 @@ A basic JACK client is also implemented that can perform pitch shifting of audio
 python3 pvc_jack.py
 ```
 
-To use the program under Pipewire, run:
-
-```
-pw-jack python3 pvc_jack.py
-```
+You'll then need to connect the inputs and outputs up using QJackCtl (or an equivalent program) as with any other JACK application. To use the program under PipeWire, add ```pw-jack``` at the beginning of the above command (on Debian, you may need to install the pipewire-audio-client-libraries package).
 
 ## Limitations
 
