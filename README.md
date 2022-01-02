@@ -3,7 +3,8 @@
 This is a phase vocoder implementation written in Python. It can be used to time-stretch audio files. This program also implements independent pitch-shifting of audio in the frequency domain, with optional formant correction.
 
 Dependencies: numpy, scipy, SoundFile
-For the JACK application you must also install: tkinter, JACK-Client
+
+To use the JACK application you must also install tkinter and JACK-Client.
 
 ## Usage
 
