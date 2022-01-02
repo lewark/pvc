@@ -15,6 +15,9 @@ D_F_PITCH_MULT = 1
 D_F_FILTER_SIZE = 8
 D_F_CORR = False
 
+MATCH_PEAKS = True
+PEAK_MAX_DIST = 16
+PEAK_THRESH=0.01
 
 class PhaseVocoder:
     def __init__(self, samplerate, blocksize):
@@ -101,11 +104,19 @@ class PhaseVocoder:
         return out_block
 
 class PeakPhaseVocoder(PhaseVocoder):
+    def __init__(self, samplerate, blocksize):
+        super().__init__(samplerate, blocksize)
+        
+        self.last_peaks = []
+
+    def compare(self, a, b):
+        return np.greater(a, b+PEAK_THRESH)
+
     def analyze(self, block, advance):
         magnitude, phase, freq = super().analyze(block, advance)
         
         #peak_pos, prop = scipy.signal.find_peaks(magnitude, width=9)
-        peak_pos = scipy.signal.argrelextrema(magnitude, np.greater, order=4)[0]
+        peak_pos = scipy.signal.argrelextrema(magnitude, self.compare, order=4)[0]
         #print(peak_pos)
         
         peak_start = []
@@ -128,18 +139,34 @@ class PeakPhaseVocoder(PhaseVocoder):
     
     def synthesize(self, magnitude, phase, frequency, peaks, in_adv, out_adv):
         dt = out_adv / self.samplerate
-
+        
         out_phase = np.zeros(phase.size)
         
         alpha = out_adv / in_adv
         # TODO: Also try beta = 1
         beta = alpha
-        
+        #print("last",self.last_peaks)
         for peak, peak_start, peak_end in peaks:
             #print (peak, peak_start, peak_end)
-            #print(phase[peak_start:peak].size)
-            # TODO: find moving peaks across frames?
-            peak_phase = self.last_phase_out[peak] + 2 * np.pi * frequency[peak] * dt
+            #print(phase[peak_start:peak].size)            
+            old_peak = peak
+            
+            #print("moving peaks")
+            #print(self.last_peaks, peaks)
+            if MATCH_PEAKS:
+                #print("checking for matches")
+                min_dist = None
+                for last_peak, lp_start, lp_end in self.last_peaks:
+                    dist = abs(peak - last_peak)
+                    #print(dist)
+                    if (min_dist == None or dist < min_dist) and dist <= PEAK_MAX_DIST:
+                        min_dist = dist
+                        old_peak = last_peak
+                    #print("checked")
+                #if min_dist != None:
+                #    print("match",peak,old_peak)
+            
+            peak_phase = self.last_phase_out[old_peak] + 2 * np.pi * frequency[peak] * dt
             #print(peak_phase)
             # force-lock partial phases to the peak phase
             out_phase[peak_start:peak] = peak_phase + beta * (phase[peak_start:peak] - phase[peak])
@@ -149,6 +176,9 @@ class PeakPhaseVocoder(PhaseVocoder):
         out_phase = self.constrain_phase(out_phase)
         
         self.last_phase_out = out_phase
+        #print(peaks)
+        self.last_peaks = peaks
+        #print(self.last_peaks)
 
         # self.window_out(magnitude, out_phase)
 
@@ -264,7 +294,7 @@ class PeakPitchShifter(PeakPhaseVocoder):
             # plt.plot(contour)
             # plt.plot(magnitude)
             # plt.show()
-
+            #print(self.f_pitch_mult)
             if self.f_pitch_mult != 1:
                 # todo: try doing this using discrete method?
                 contour = np.interp(
@@ -295,6 +325,7 @@ class PeakPitchShifter(PeakPhaseVocoder):
             
             new_peaks = []
             # Remap peak bin indexes
+            # TODO: deal with bin overlap when shifting downward
             for peak in peaks:
                 peak_pos = peak[0]
                 peak_start = peak[1]
