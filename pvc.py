@@ -3,19 +3,20 @@ import argparse
 import numpy as np
 import soundfile
 
-#import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 import phasevocoder
 import pitchshift
 
 # Default parameters
-D_BLOCK_SIZE = 2048 #4096
+D_BLOCK_SIZE = 2048  # 4096
 D_N_BLOCKS = 4
 D_LENGTH_MULT = 1
 D_PITCH_MULT = 1
 D_F_PITCH_MULT = 1
 D_F_FILTER_SIZE = 8
 D_F_CORR = False
+
 
 class FileProcessor:
     def __init__(
@@ -60,7 +61,7 @@ class FileProcessor:
                 self.f_pitch_mult,
                 self.f_corr,
                 self.f_filter_size,
-                True
+                True,
             )
             for i in range(self.in_file.channels)
         ]
@@ -90,6 +91,7 @@ class FileProcessor:
 
     def write(self, filename):
         soundfile.write(filename, self.out_data, self.rate)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

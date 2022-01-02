@@ -3,6 +3,7 @@ import scipy.signal
 
 import phasevocoder
 
+
 class PitchShifter(phasevocoder.PhaseVocoder):
     """
     Pitch-shifts the input signal by warping the frequency spectrum
@@ -123,10 +124,10 @@ class TimeDomainPitchShifter(phasevocoder.PhaseVocoder):
     def process(self, block, in_shift, out_shift):
         magnitude, phase, frequency = self.analyze(block, in_shift)
 
-        #print(np.max(np.abs(frequency - self.freq)),np.mean(np.abs(frequency - self.freq)))
+        # print(np.max(np.abs(frequency - self.freq)),np.mean(np.abs(frequency - self.freq)))
 
         new_length = int(round(self.blocksize / self.pitch_mult))
-        
+
         if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
             contour = np.maximum(
                 scipy.ndimage.maximum_filter1d(magnitude, self.f_filter_size), 0.001
@@ -143,9 +144,9 @@ class TimeDomainPitchShifter(phasevocoder.PhaseVocoder):
             # re-apply the formants
             magnitude = magnitude * contour
 
-
-        out_block = self.synthesize(magnitude, frequency, out_shift * (self.blocksize / new_length))
-
+        out_block = self.synthesize(
+            magnitude, frequency, out_shift * (self.blocksize / new_length)
+        )
 
         # Resample the output block to pitch-shift it
         out_block = np.interp(

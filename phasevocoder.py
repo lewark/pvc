@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.signal
 
+# TODO: Move peak detection flags to command-line args
 MATCH_PEAKS = True
 PEAK_MAX_DIST = 16
 PEAK_THRESH = 0.01
@@ -141,4 +142,3 @@ class PeakPhaseVocoder(PhaseVocoder):
         out_block = np.fft.irfft(fft) * self.window
 
         return out_block
-

@@ -3,6 +3,7 @@
 This is a phase vocoder implementation written in Python. It can be used to time-stretch audio files. This program also implements independent pitch-shifting of audio in the frequency domain, with optional formant correction.
 
 Dependencies: numpy, scipy, SoundFile
+For the JACK application you must also install: tkinter, JACK-Client
 
 ## Usage
 
@@ -12,9 +13,23 @@ Run the following command to view the available parameters:
 python3 pvc.py --help
 ```
 
+### JACK application
+
+A basic JACK client is also implemented that can perform pitch shifting of audio in real time. It can be started using the following command:
+
+```
+python3 pvc_jack.py
+```
+
+To use the program under Pipewire, run:
+
+```
+pw-jack python3 pvc_jack.py
+```
+
 ## Limitations
 
-Currently, this phase vocoder creates significant phase artifacts when pitch-shifting audio by a non-integer ratio. This issue can be reduced a bit by phase-locking frequencies to nearby peaks but is still not completely resolved. 
+Currently, this phase vocoder can create significant phase artifacts when pitch-shifting audio. A few alternate algorithms are provided that may be able to reduce this problem but so far I have not found a complete solution.
 
 ## References
 
