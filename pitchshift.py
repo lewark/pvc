@@ -29,7 +29,7 @@ class PitchShifter(phasevocoder.PhaseVocoder):
         self.f_corr = f_corr
         self.f_filter_size = f_filter_size
         
-        self.formant_corr = formant.FormantCorr(f_filter_size, f_pitch_mult)
+        self.formant_corr = formant.FormantModifier(self, f_filter_size, f_pitch_mult, (1,1.2)) #formant.FormantCorr(self, f_filter_size, f_pitch_mult)
 
         self.linear = linear
 
@@ -37,7 +37,7 @@ class PitchShifter(phasevocoder.PhaseVocoder):
         magnitude, phase, frequency = self.analyze(block, in_shift)
 
         if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
-            magnitude = self.formant.remove_formants(magnitude)
+            magnitude = self.formant_corr.remove_formants(magnitude)
 
         if self.pitch_mult != 1:
             if self.linear:
@@ -82,7 +82,7 @@ class PitchShifter(phasevocoder.PhaseVocoder):
 
         if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
             # re-apply the formants
-            magnitude = self.formant.apply_formants(magnitude)
+            magnitude = self.formant_corr.apply_formants(magnitude)
 
         out_block = self.synthesize(magnitude, frequency, out_shift)
         return out_block
