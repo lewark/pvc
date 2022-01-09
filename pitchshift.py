@@ -1,7 +1,10 @@
 import numpy as np
 import scipy.signal
+import scipy.ndimage
+import matplotlib.pyplot as plt
 
 import phasevocoder
+import formant
 
 
 class PitchShifter(phasevocoder.PhaseVocoder):
@@ -25,30 +28,16 @@ class PitchShifter(phasevocoder.PhaseVocoder):
         self.f_pitch_mult = f_pitch_mult
         self.f_corr = f_corr
         self.f_filter_size = f_filter_size
+        
+        self.formant_corr = formant.FormantCorr(f_filter_size, f_pitch_mult)
 
         self.linear = linear
 
     def process(self, block, in_shift, out_shift):
         magnitude, phase, frequency = self.analyze(block, in_shift)
 
-        contour = None
         if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
-            contour = np.maximum(
-                scipy.ndimage.maximum_filter1d(magnitude, self.f_filter_size), 0.001
-            )
-
-            # divide the formants out of the signal, leaving the smaller-scale peaks
-            magnitude = magnitude / contour
-
-            # plt.plot(contour)
-            # plt.plot(magnitude)
-            # plt.show()
-
-            if self.f_pitch_mult != 1:
-                # todo: try doing this using discrete method?
-                contour = np.interp(
-                    self.indices / self.f_pitch_mult, self.indices, contour, 0, 0
-                )
+            magnitude = self.formant.remove_formants(magnitude)
 
         if self.pitch_mult != 1:
             if self.linear:
@@ -93,7 +82,7 @@ class PitchShifter(phasevocoder.PhaseVocoder):
 
         if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
             # re-apply the formants
-            magnitude = magnitude * contour
+            magnitude = self.formant.apply_formants(magnitude)
 
         out_block = self.synthesize(magnitude, frequency, out_shift)
         return out_block
@@ -132,6 +121,8 @@ class TimeDomainPitchShifter(phasevocoder.PhaseVocoder):
             contour = np.maximum(
                 scipy.ndimage.maximum_filter1d(magnitude, self.f_filter_size), 0.001
             )
+            
+            
 
             # remove the formant resonances from the signal,
             # leaving the smaller-scale peaks
