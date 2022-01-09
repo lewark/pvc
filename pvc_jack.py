@@ -144,8 +144,9 @@ class GUI:
 
     def reset_phase(self, evt):
         print("reset phase")
-        self.pvc_jack.pvc.last_phase_out = np.array(self.pvc_jack.pvc.last_phase)
-        # self.pvc_jack.pvc.last_phase_out.fill(0)
+        #self.pvc_jack.pvc.last_phase_out = np.array(self.pvc_jack.pvc.last_phase)
+        self.pvc_jack.pvc.last_phase.fill(0)
+        self.pvc_jack.pvc.last_phase_out.fill(0)
 
     def create_slider(self, cmd, name, default):
         i = len(self.sliders)
