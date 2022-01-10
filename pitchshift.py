@@ -35,6 +35,7 @@ class PitchShifter(phasevocoder.PhaseVocoder):
 
     def process(self, block, in_shift, out_shift):
         magnitude, phase, frequency = self.analyze(block, in_shift)
+        #magnitude[0] = 0
 
         if self.f_corr and (self.pitch_mult != 1 or self.f_pitch_mult != 1):
             magnitude = self.formant_corr.remove_formants(magnitude)

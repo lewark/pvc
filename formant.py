@@ -66,7 +66,7 @@ class FormantModifier(FormantCorr):
         #plt.scatter(self.freq[peaks], blurred[peaks])
         #plt.show()
 
-        # TODO: Shift the formants
+        # Shift the formants
         
         end = 0
         n_peaks = len(peaks)
@@ -85,14 +85,15 @@ class FormantModifier(FormantCorr):
             else:
                 end = blurred.size
 
-            if i < len(self.formant_pitch) and self.formant_pitch[i] != 1:
+            # TODO: doesn't work right with pitch_mult != 1
+            if i < len(self.formant_pitch) and (self.formant_pitch[i] != 1 or self.pitch_mult != 1):
                 layer = np.zeros(contour.size)
                 layer[start:end] = contour[start:end]
                 layer = np.interp(
-                    self.pitch_shifter.indices / self.formant_pitch[i], self.pitch_shifter.indices, layer, 0, 0
+                    self.pitch_shifter.indices / (self.formant_pitch[i] * self.pitch_mult), self.pitch_shifter.indices, layer, 0, 0
                 )
                 new_contour += layer
             else:
                 new_contour[start:end] += contour[start:end]
         
-        return super().process_formants(new_contour, magnitude)
+        return new_contour
