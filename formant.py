@@ -85,12 +85,16 @@ class FormantModifier(FormantCorr):
             else:
                 end = blurred.size
 
-            # TODO: doesn't work right with pitch_mult != 1
-            if i < len(self.formant_pitch) and (self.formant_pitch[i] != 1 or self.pitch_mult != 1):
+            if self.pitch_mult != 1 or (i < len(self.formant_pitch) and self.formant_pitch[i] != 1):
+                # TODO: only interpolate the formant itself
+                pitch = self.pitch_mult
+                if i < len(self.formant_pitch):
+                    pitch *= self.formant_pitch[i]
+                    
                 layer = np.zeros(contour.size)
                 layer[start:end] = contour[start:end]
                 layer = np.interp(
-                    self.pitch_shifter.indices / (self.formant_pitch[i] * self.pitch_mult), self.pitch_shifter.indices, layer, 0, 0
+                    self.pitch_shifter.indices / pitch, self.pitch_shifter.indices, layer, 0, 0
                 )
                 new_contour += layer
             else:
