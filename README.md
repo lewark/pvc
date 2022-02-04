@@ -28,7 +28,7 @@ You'll then need to connect the inputs and outputs up using QJackCtl (or an equi
 
 ## Limitations
 
-Currently, this phase vocoder can create significant phase artifacts when pitch-shifting audio. A few alternate algorithms are provided that may be able to reduce this problem but so far I have not found a complete solution.
+Currently, this phase vocoder can create significant phase artifacts when pitch-shifting audio at non-integer factors due to loss of vertical phase coherence. A few alternate algorithms are provided that may be able to reduce this problem but so far I have not found a complete solution.
 
 ## References
 
@@ -37,6 +37,8 @@ Bernsee, Stephan M. "On the Importance of Formants in Pitch Shifting." *Stephan 
 Bernsee, Stephan M. "Pitch Shifting Using The Fourier Transform." *Stephan Bernsee's Blog,* 21 Sep. 1999, [blogs.zynaptiq.com/bernsee/pitch-shifting-using-the-ft/](http://blogs.zynaptiq.com/bernsee/pitch-shifting-using-the-ft/).
 
 De Götzen, Amalia, et al. "Traditional (?) Implementations of a Phase-Vocoder: The Tricks of the Trade." *Proceedings of the COST G-6 Conference on Digital Audio Effects,* 7-9 Dec. 2000.
+
+Driedger, Johnathan, and Meinard Müller. "A Review of Time-Scale Modification of Music Signals." *Applied Sciences,* 18 Feb. 2016, vol. 6, no. 2, p. 57, [www.mdpi.com/2076-3417/6/2/57](https://www.mdpi.com/2076-3417/6/2/57).
 
 Dudas, Richard, and Cort Lippe. "The Phase Vocoder - Part I." *Cycling '74,* 2 Nov. 2006, [cycling74.com/tutorials/the-phase-vocoder-%E2%80%93-part-i](https://cycling74.com/tutorials/the-phase-vocoder-%E2%80%93-part-i).
 
