@@ -28,7 +28,7 @@ You'll then need to connect the inputs and outputs up using QJackCtl (or an equi
 
 ## Limitations
 
-Currently, this phase vocoder can create significant phase artifacts when pitch-shifting audio at non-integer factors due to loss of vertical phase coherence. A few alternate algorithms are provided that may be able to reduce this problem but so far I have not found a complete solution.
+Currently, this phase vocoder can create significant phase artifacts when pitch-shifting audio at non-integer factors due to loss of vertical phase coherence (the different frequencies drift out of phase with respect to one another, causing a smearing effect). A few alternate algorithms are provided that may be able to reduce this problem but so far I have not found a complete solution.
 
 ## References
 
